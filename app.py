@@ -6,6 +6,10 @@ import keyboard
 import tkinter as tk
 from tkinter import ttk, font as tkfont
 from datetime import datetime
+import cv2
+import numpy as np
+from PIL import ImageGrab
+
 
 # ──────────────────────────────────────────────
 #  CONFIGURAÇÕES DOS SLOTS (inalteradas)
@@ -21,6 +25,31 @@ delay_click   = 0.001
 delay_posicao = 0.001
 rodando       = False
 tempo_ciclo   = 3600
+
+# ──────────────────────────────────────────────
+#  DETECÇÃO DE ITEM NO SLOT
+# ──────────────────────────────────────────────
+SLOT_SAMPLE = 8    # metade do tamanho da área de captura (16x16px central)
+SATURACAO_MIN = 6  # saturação mínima para considerar que tem item
+
+def slot_tem_item(cx, cy):
+    """
+    Captura 16x16px no centro do slot e verifica a saturação de cor.
+    Slot VAZIO:    R ≈ G ≈ B  (cinza escuro, saturação ≈ 0)
+    Slot COM ITEM: tem cor (laranja/roxo/vermelho), saturação > SATURACAO_MIN
+    """
+    x1 = cx - SLOT_SAMPLE
+    y1 = cy - SLOT_SAMPLE
+    x2 = cx + SLOT_SAMPLE
+    y2 = cy + SLOT_SAMPLE
+    try:
+        img = ImageGrab.grab(bbox=(x1, y1, x2, y2))
+        arr = np.array(img).astype(float)
+        media = arr.mean(axis=(0, 1))          # média R, G, B
+        saturacao = float(np.max(media[:3]) - np.min(media[:3]))
+        return saturacao > SATURACAO_MIN
+    except Exception:
+        return True  # em caso de erro, clica mesmo assim
 
 # ──────────────────────────────────────────────
 #  PALETA DE CORES
@@ -44,7 +73,7 @@ BORDER    = "#2a2640"
 # ──────────────────────────────────────────────
 root = tk.Tk()
 root.title("MU COSMIC BOT")
-root.geometry("480x680")
+root.geometry("480x760")
 root.resizable(False, False)
 root.configure(bg=BG)
 
@@ -170,7 +199,40 @@ btn_aplicar = tk.Button(
 )
 btn_aplicar.pack(side="left", padx=(8, 0))
 
-# — Countdown —
+# — Sensibilidade de detecção —
+sec("SENSIBILIDADE DE DETECÇÃO")
+
+sens_row = tk.Frame(ctrl, bg=BG_PANEL)
+sens_row.pack(fill="x", pady=(0, 2))
+
+tk.Label(sens_row, text="Saturação mín.:", font=MONO, fg=TEXT_DIM, bg=BG_PANEL).pack(side="left")
+
+sens_var = tk.IntVar(value=SATURACAO_MIN)
+sens_spin = tk.Spinbox(
+    sens_row, from_=1, to=30, textvariable=sens_var,
+    width=4, font=MONO, bg=BG_INPUT, fg=TEXT,
+    buttonbackground=BG_INPUT, relief="flat",
+    highlightthickness=1, highlightbackground=BORDER,
+    insertbackground=PURPLE,
+)
+sens_spin.pack(side="left", padx=(8, 0))
+
+tk.Label(sens_row, text="  (padrão=6)", font=SMALL_F, fg=TEXT_DIM, bg=BG_PANEL).pack(side="left")
+
+def aplicar_sensibilidade():
+    global SATURACAO_MIN
+    SATURACAO_MIN = sens_var.get()
+    log(f"Saturação mín. = {SATURACAO_MIN} (menor = mais sensível)", "info")
+
+btn_sens = tk.Button(
+    sens_row, text="OK", font=SMALL_F,
+    fg=BG, bg=PURPLE_DK, activebackground=PURPLE, activeforeground=BG,
+    relief="flat", bd=0, padx=8, pady=4, cursor="hand2",
+    command=aplicar_sensibilidade,
+)
+btn_sens.pack(side="left", padx=(8, 0))
+
+
 sec("PRÓXIMO CICLO")
 countdown_row = tk.Frame(ctrl, bg=BG_PANEL)
 countdown_row.pack(fill="x")
@@ -304,14 +366,22 @@ def rodar_bot(janelas):
             except Exception:
                 continue
 
+            slots_clicados = 0
+            slots_pulados  = 0
             for pos in posicoes:
                 if not rodando:
                     return
-                pyautogui.keyDown('ctrl')
-                pyautogui.click(pos[0], pos[1], button='right')
-                pyautogui.click(pos[0], pos[1], button='right')
-                pyautogui.keyUp('ctrl')
-                time.sleep(delay_click)
+                if slot_tem_item(pos[0], pos[1]):
+                    pyautogui.keyDown('ctrl')
+                    pyautogui.click(pos[0], pos[1], button='right')
+                    pyautogui.click(pos[0], pos[1], button='right')
+                    pyautogui.keyUp('ctrl')
+                    time.sleep(delay_click)
+                    slots_clicados += 1
+                else:
+                    slots_pulados += 1
+
+            log(f"  ✔ {slots_clicados} slots clicados / {slots_pulados} vazios pulados", "ok")
 
             ciclos_por_janela[win.title] += 1
             time.sleep(delay_posicao)
