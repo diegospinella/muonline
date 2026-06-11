@@ -213,7 +213,7 @@ sens_spin = tk.Spinbox(
     insertbackground=PURPLE,
 )
 sens_spin.pack(side="left", padx=(8, 0))
-tk.Label(sens_row, text="  (padrão=4, menor=mais sensível)", font=SMALL_F,
+tk.Label(sens_row, text="  (padrão = 4, menor = mais sensível)", font=SMALL_F,
          fg=TEXT_DIM, bg=BG_PANEL).pack(side="left")
 
 def aplicar_sensibilidade():
