@@ -21,45 +21,42 @@ espaco_y  = 31
 posicoes  = [(x_inicial + c * espaco_x, y_inicial + l * espaco_y)
              for l in range(8) for c in range(8)]
 
-delay_click   = 0.0   # era 0.001
-delay_posicao = 0.0   # era 0.001
+delay_click   = 0.0
+delay_posicao = 0.0
 rodando       = False
 tempo_ciclo   = 3600
 
 # ──────────────────────────────────────────────
-#  DETECÇÃO DE ITEM NO SLOT
-#
-#  Problema anterior: usava média RGB do slot inteiro.
-#  Se o item é pequeno, o fundo escuro dilui a cor e
-#  a saturação calculada cai a zero mesmo com item.
-#
-#  Solução: analisar pixel a pixel em HSV e contar
-#  quantos pixels têm saturação alta E brilho mínimo.
-#  Se pelo menos N pixels passarem o filtro → tem item.
+#  ESTATÍSTICAS GLOBAIS
 # ──────────────────────────────────────────────
-SLOT_SAMPLE    = 10     # metade da área capturada (20x20px central)
-SAT_PX_MIN     = 30     # saturação mínima por pixel (0-255) para contar
-BRILHO_PX_MIN  = 35     # brilho mínimo por pixel (0-255) para contar
-PIXELS_MIN     = 4      # quantidade mínima de pixels "coloridos" para detectar item
+total_geral        = 0          # cliques desde o INICIAR
+hora_inicio_bot    = None       # datetime do INICIAR
+
+# Snapshots: {segundos: cliques_naquele_momento}
+INTERVALOS_SEG = [1800, 3600, 5400, 7200, 10800, 14400, 18000, 21600, 25200, 28800]
+INTERVALOS_ROT = ["30min","1h","1h30","2h","3h","4h","5h","6h","7h","8h"]
+snapshots       = {}   # seg -> total registrado
+snapshot_labels = {}   # seg -> tk.Label (referência para atualizar)
+
+# ──────────────────────────────────────────────
+#  DETECÇÃO DE ITEM NO SLOT
+# ──────────────────────────────────────────────
+SLOT_SAMPLE    = 10
+SAT_PX_MIN     = 30
+BRILHO_PX_MIN  = 35
+PIXELS_MIN     = 4
 
 def slot_tem_item(cx, cy):
-    """
-    Captura 20x20px no centro do slot.
-    Converte para HSV e conta pixels com:
-      - Saturação >= SAT_PX_MIN  (tem cor, não é cinza)
-      - Brilho    >= BRILHO_PX_MIN (não é puro preto)
-    Se a contagem >= PIXELS_MIN → tem item.
-    """
     try:
         img = ImageGrab.grab(bbox=(cx - SLOT_SAMPLE, cy - SLOT_SAMPLE,
                                    cx + SLOT_SAMPLE, cy + SLOT_SAMPLE))
         hsv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2HSV)
-        sat    = hsv[:, :, 1]  # canal S
-        brilho = hsv[:, :, 2]  # canal V
+        sat    = hsv[:, :, 1]
+        brilho = hsv[:, :, 2]
         mask   = (sat >= SAT_PX_MIN) & (brilho >= BRILHO_PX_MIN)
         return int(np.sum(mask)) >= PIXELS_MIN
     except Exception:
-        return True   # em caso de erro, clica mesmo assim
+        return True
 
 
 # ──────────────────────────────────────────────
@@ -84,7 +81,7 @@ BORDER    = "#2a2640"
 # ──────────────────────────────────────────────
 root = tk.Tk()
 root.title("MU COSMIC BOT")
-root.geometry("480x780")
+root.geometry("480x900")
 root.resizable(False, False)
 root.configure(bg=BG)
 
@@ -92,7 +89,9 @@ MONO    = tkfont.Font(family="Consolas", size=10)
 MONO_B  = tkfont.Font(family="Consolas", size=10, weight="bold")
 TITLE_F = tkfont.Font(family="Consolas", size=14, weight="bold")
 SMALL_F = tkfont.Font(family="Consolas", size=9)
+TINY_F  = tkfont.Font(family="Consolas", size=8)
 BIG_F   = tkfont.Font(family="Consolas", size=20, weight="bold")
+MED_F   = tkfont.Font(family="Consolas", size=11, weight="bold")
 
 # ──────────────────────────────────────────────
 #  HEADER
@@ -115,15 +114,15 @@ tk.Frame(root, bg=BORDER, height=1).pack(fill="x")
 # ──────────────────────────────────────────────
 #  PAINEL DE CONTROLE
 # ──────────────────────────────────────────────
-ctrl = tk.Frame(root, bg=BG_PANEL, padx=18, pady=14)
+ctrl = tk.Frame(root, bg=BG_PANEL, padx=18, pady=10)
 ctrl.pack(fill="x")
 
-def sec(txt):
-    tk.Label(ctrl, text=txt, font=MONO_B, fg=PURPLE,
-             bg=BG_PANEL, anchor="w").pack(fill="x", pady=(10, 3))
+def sec(parent, txt):
+    tk.Label(parent, text=txt, font=MONO_B, fg=PURPLE,
+             bg=BG_PANEL, anchor="w").pack(fill="x", pady=(8, 2))
 
 # — Janelas —
-sec("JANELAS DETECTADAS")
+sec(ctrl, "JANELAS DETECTADAS")
 win_label = tk.Label(ctrl, text="—", font=MONO, fg=TEXT_DIM,
                      bg=BG_PANEL, anchor="w", justify="left")
 win_label.pack(fill="x")
@@ -136,7 +135,7 @@ def atualizar_janelas_label():
         win_label.config(text="Nenhuma janela encontrada", fg=TEXT_DIM)
 
 # — Ciclo (dropdown) —
-sec("TEMPO DE CICLO")
+sec(ctrl, "TEMPO DE CICLO")
 
 OPCOES_CICLO = {
     "10 segundos (teste)": 10,
@@ -159,10 +158,8 @@ style = ttk.Style()
 style.theme_use("clam")
 style.configure("Dark.TMenubutton",
     background=BG_INPUT, foreground=TEXT,
-    font=("Consolas", 10),
-    relief="flat",
-    borderwidth=1,
-    arrowcolor=PURPLE_LT,
+    font=("Consolas", 10), relief="flat",
+    borderwidth=1, arrowcolor=PURPLE_LT,
 )
 style.map("Dark.TMenubutton",
     background=[("active", PURPLE_DK)],
@@ -200,15 +197,13 @@ btn_aplicar = tk.Button(
 )
 btn_aplicar.pack(side="left", padx=(8, 0))
 
-# — Sensibilidade de detecção —
-sec("SENSIBILIDADE DE DETECÇÃO")
-
+# — Sensibilidade —
+sec(ctrl, "SENSIBILIDADE DE DETECÇÃO")
 sens_row = tk.Frame(ctrl, bg=BG_PANEL)
 sens_row.pack(fill="x", pady=(0, 2))
 
 tk.Label(sens_row, text="Pixels mín.:", font=MONO, fg=TEXT_DIM, bg=BG_PANEL).pack(side="left")
 
-# Agora controlamos PIXELS_MIN (mais intuitivo que saturação)
 sens_var = tk.IntVar(value=PIXELS_MIN)
 sens_spin = tk.Spinbox(
     sens_row, from_=1, to=40, textvariable=sens_var,
@@ -218,14 +213,13 @@ sens_spin = tk.Spinbox(
     insertbackground=PURPLE,
 )
 sens_spin.pack(side="left", padx=(8, 0))
-
 tk.Label(sens_row, text="  (padrão=4, menor=mais sensível)", font=SMALL_F,
          fg=TEXT_DIM, bg=BG_PANEL).pack(side="left")
 
 def aplicar_sensibilidade():
     global PIXELS_MIN
     PIXELS_MIN = sens_var.get()
-    log(f"Pixels mín. = {PIXELS_MIN} (menor = detecta mais fácil)", "info")
+    log(f"Pixels mín. = {PIXELS_MIN}", "info")
 
 btn_sens = tk.Button(
     sens_row, text="OK", font=SMALL_F,
@@ -236,7 +230,7 @@ btn_sens = tk.Button(
 btn_sens.pack(side="left", padx=(8, 0))
 
 # — Countdown —
-sec("PRÓXIMO CICLO")
+sec(ctrl, "PRÓXIMO CICLO")
 countdown_row = tk.Frame(ctrl, bg=BG_PANEL)
 countdown_row.pack(fill="x")
 
@@ -247,6 +241,68 @@ countdown_label.pack(side="left")
 ciclo_geral_label = tk.Label(countdown_row, text="  ciclo #0", font=SMALL_F,
                               fg=TEXT_DIM, bg=BG_PANEL)
 ciclo_geral_label.pack(side="left", padx=(8, 0))
+
+# — Total geral ao vivo —
+total_label = tk.Label(countdown_row, text="  ✦ 0 joias", font=MONO_B,
+                       fg=YELLOW, bg=BG_PANEL)
+total_label.pack(side="right", padx=(0, 4))
+
+tk.Frame(root, bg=BORDER, height=1).pack(fill="x")
+
+# ──────────────────────────────────────────────
+#  PAINEL DE ESTATÍSTICAS POR TEMPO
+# ──────────────────────────────────────────────
+stats_frame = tk.Frame(root, bg=BG_PANEL, padx=18, pady=8)
+stats_frame.pack(fill="x")
+
+tk.Label(stats_frame, text="JOIAS RESGATADAS POR INTERVALO", font=MONO_B,
+         fg=PURPLE, bg=BG_PANEL, anchor="w").pack(fill="x", pady=(0, 6))
+
+# Grid 2 colunas × 5 linhas
+grid = tk.Frame(stats_frame, bg=BG_PANEL)
+grid.pack(fill="x")
+
+for i, (seg, rot) in enumerate(zip(INTERVALOS_SEG, INTERVALOS_ROT)):
+    col = i % 2
+    row = i // 2
+
+    cell = tk.Frame(grid, bg=BG_INPUT, padx=8, pady=4)
+    cell.grid(row=row, column=col, padx=(0 if col else 0, 6), pady=2, sticky="ew")
+    grid.columnconfigure(col, weight=1)
+
+    tk.Label(cell, text=rot, font=TINY_F, fg=TEXT_DIM, bg=BG_INPUT,
+             anchor="w").pack(side="left")
+
+    lbl = tk.Label(cell, text="—", font=MED_F, fg=TEXT_DIM, bg=BG_INPUT,
+                   anchor="e")
+    lbl.pack(side="right")
+    snapshot_labels[seg] = lbl
+
+def reset_stats():
+    """Zera estatísticas ao iniciar o bot."""
+    global total_geral, hora_inicio_bot, snapshots
+    total_geral     = 0
+    hora_inicio_bot = datetime.now()
+    snapshots       = {}
+    total_label.config(text="  ✦ 0 joias")
+    for lbl in snapshot_labels.values():
+        lbl.config(text="—", fg=TEXT_DIM)
+
+def registrar_snapshot():
+    """
+    Chamado após cada ciclo. Verifica se algum intervalo
+    de tempo foi atingido e registra o total acumulado.
+    """
+    if hora_inicio_bot is None:
+        return
+    elapsed = (datetime.now() - hora_inicio_bot).total_seconds()
+    for seg in INTERVALOS_SEG:
+        if seg not in snapshots and elapsed >= seg:
+            snapshots[seg] = total_geral
+            rot = INTERVALOS_ROT[INTERVALOS_SEG.index(seg)]
+            lbl = snapshot_labels[seg]
+            lbl.config(text=str(total_geral), fg=GREEN)
+            log(f"  📊 {rot}: {total_geral} joias resgatadas", "warn")
 
 tk.Frame(root, bg=BORDER, height=1).pack(fill="x")
 
@@ -261,8 +317,7 @@ def small_btn(parent, text, color, cmd):
         parent, text=text, font=MONO_B,
         fg=BG, bg=color,
         activebackground=TEXT, activeforeground=BG,
-        relief="flat", bd=0,
-        padx=14, pady=6,
+        relief="flat", bd=0, padx=14, pady=6,
         cursor="hand2", command=cmd,
     )
     b.pack(side="left", padx=(0, 8))
@@ -270,6 +325,7 @@ def small_btn(parent, text, color, cmd):
 
 def on_iniciar():
     if not rodando:
+        reset_stats()
         aplicar_ciclo()
         log("Iniciando bot...", "info")
         atualizar_janelas_label()
@@ -282,8 +338,7 @@ small_btn(btn_bar, "▶ INICIAR", GREEN,  on_iniciar)
 small_btn(btn_bar, "■ PARAR",   RED,    on_parar)
 small_btn(btn_bar, "⟳ SCAN",   PURPLE, atualizar_janelas_label)
 
-# — Tecla de parada —
-tk.Label(btn_bar, text="  Parar: Ctrl+F10", font=SMALL_F,
+tk.Label(btn_bar, text="  Parar: [-]", font=SMALL_F,
          fg=TEXT_DIM, bg=BG_PANEL).pack(side="left", padx=(4, 0))
 
 tk.Frame(root, bg=BORDER, height=1).pack(fill="x")
@@ -358,20 +413,21 @@ def timer_regressivo(segundos):
         log("Iniciando novo ciclo...", "cycle")
 
 def rodar_bot(janelas):
-    global rodando
+    global rodando, total_geral
     ciclo_geral = 0
 
     while rodando:
+        cliques_ciclo = 0   # total deste ciclo específico
+
         for win in janelas:
             if not rodando:
                 return
 
-            # — Tenta ativar a janela com retry —
             ativou = False
-            for tentativa in range(3):
+            for _ in range(3):
                 try:
                     win.activate()
-                    time.sleep(0.03)   # era 0.08
+                    time.sleep(0.03)
                     ativou = True
                     break
                 except Exception:
@@ -400,13 +456,21 @@ def rodar_bot(janelas):
                     slots_pulados += 1
 
             log(f"  ✔ {slots_clicados} slot(s) clicado(s) / {slots_pulados} vazio(s)", "ok")
+            cliques_ciclo += slots_clicados
             time.sleep(delay_posicao)
 
-        ciclo_geral += 1
-        ciclo_geral_label.config(text=f"  ciclo #{ciclo_geral}")
-        log(f"=== Ciclo {ciclo_geral} completo ===", "cycle")
+        # — Atualiza totais —
+        ciclo_geral  += 1
+        total_geral  += cliques_ciclo
 
-        # Timer com join com timeout para não travar
+        ciclo_geral_label.config(text=f"  ciclo #{ciclo_geral}")
+        total_label.config(text=f"  ✦ {total_geral} joias")
+
+        log(f"=== Ciclo {ciclo_geral}: {cliques_ciclo} joias  |  Total: {total_geral} ===", "cycle")
+
+        # Verifica snapshots de intervalo
+        registrar_snapshot()
+
         t = threading.Thread(target=timer_regressivo, args=(tempo_ciclo,), daemon=True)
         t.start()
         while t.is_alive():
@@ -433,10 +497,9 @@ def parar_bot():
     global rodando
     if rodando:
         rodando = False
-        log("Bot cancelado pelo usuário.", "warn")
+        log(f"Bot parado. Total da sessão: {total_geral} joias.", "warn")
         root.after(0, lambda: set_status(False))
 
-# — Tecla de parada:F
 def monitorar_cancelamento():
     while True:
         if keyboard.is_pressed("-") and rodando:
