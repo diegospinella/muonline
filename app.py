@@ -100,12 +100,23 @@ sec("TEMPO DE CICLO")
 
 OPCOES_CICLO = {
     "10 segundos (teste)": 10,
+    "1 minuto":            60,
+    "10 minutos":          600,
+    "20 minutos":          1200,
+    "30 minutos":          1800,
+    "40 minutos":          2400,
+    "50 minutos":          3000,
     "1 hora":              3600,
     "1h 30min":            5400,
     "2 horas":             7200,
 }
 
-ciclo_var = tk.StringVar(value="1 hora")
+# Ordena as opções pelo valor (segundos)
+opcoes_ordenadas = dict(sorted(OPCOES_CICLO.items(), key=lambda x: x[1]))
+
+# Valor inicial agora é o menor tempo (10 segundos)
+primeira_opcao = next(iter(opcoes_ordenadas.keys()))
+ciclo_var = tk.StringVar(value=primeira_opcao)
 
 # Estilo do OptionMenu
 style = ttk.Style()
@@ -125,7 +136,7 @@ style.map("Dark.TMenubutton",
 dropdown_row = tk.Frame(ctrl, bg=BG_PANEL)
 dropdown_row.pack(fill="x", pady=(0, 2))
 
-dropdown = ttk.OptionMenu(dropdown_row, ciclo_var, "1 hora", *OPCOES_CICLO.keys())
+dropdown = ttk.OptionMenu(dropdown_row, ciclo_var, primeira_opcao, *opcoes_ordenadas.keys())
 dropdown.configure(style="Dark.TMenubutton", width=22)
 dropdown["menu"].configure(bg=BG_INPUT, fg=TEXT, activebackground=PURPLE_DK,
                             activeforeground=TEXT, font=("Consolas", 10),
@@ -134,9 +145,22 @@ dropdown.pack(side="left")
 
 def aplicar_ciclo():
     global tempo_ciclo
-    tempo_ciclo = OPCOES_CICLO[ciclo_var.get()]
-    label = f"{tempo_ciclo}s (TESTE)" if tempo_ciclo < 60 else f"{tempo_ciclo//60} min"
+    tempo_ciclo = opcoes_ordenadas[ciclo_var.get()]
+
+    if tempo_ciclo < 60:
+        # Menos de 1 minuto → mostra em segundos
+        label = f"{tempo_ciclo}s (TESTE)"
+    elif tempo_ciclo < 3600:
+        # Menos de 1 hora → mostra em minutos
+        label = f"{tempo_ciclo//60:02d} min"
+    else:
+        # 1 hora ou mais → mostra em horas e minutos com zeros à esquerda
+        horas = tempo_ciclo // 3600
+        minutos = (tempo_ciclo % 3600) // 60
+        label = f"{horas:02d}h {minutos:02d}min"
+
     log(f"Ciclo: {label}", "warn" if tempo_ciclo < 60 else "info")
+
 
 btn_aplicar = tk.Button(
     dropdown_row, text="Aplicar", font=SMALL_F,
