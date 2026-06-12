@@ -10,6 +10,8 @@ import cv2
 import numpy as np
 from PIL import ImageGrab
 
+pyautogui.FAILSAFE = False   # evita crash se mouse for ao canto da tela
+
 
 # ──────────────────────────────────────────────
 #  CONFIGURAÇÕES DOS SLOTS
@@ -338,7 +340,7 @@ small_btn(btn_bar, "▶ INICIAR", GREEN,  on_iniciar)
 small_btn(btn_bar, "■ PARAR",   RED,    on_parar)
 small_btn(btn_bar, "⟳ SCAN",   PURPLE, atualizar_janelas_label)
 
-tk.Label(btn_bar, text="  Parar: [-]", font=SMALL_F,
+tk.Label(btn_bar, text="  Parar: Ctrl+-", font=SMALL_F,
          fg=TEXT_DIM, bg=BG_PANEL).pack(side="left", padx=(4, 0))
 
 tk.Frame(root, bg=BORDER, height=1).pack(fill="x")
@@ -520,19 +522,17 @@ def parar_bot():
         log(f"Bot parado. Total da sessão: {total_geral} joias.", "warn")
         root.after(0, lambda: set_status(False))
 
-def monitorar_cancelamento():
-    while True:
-        if keyboard.is_pressed("-") and rodando:
-            parar_bot()
-        time.sleep(0.1)
+def _hotkey_parar():
+    if rodando:
+        parar_bot()
 
-threading.Thread(target=monitorar_cancelamento, daemon=True).start()
+keyboard.add_hotkey("ctrl+-", _hotkey_parar, suppress=False)
 
 # ──────────────────────────────────────────────
 #  INIT
 # ──────────────────────────────────────────────
 log("Pronto. Selecione o ciclo e clique INICIAR.", "info")
-log("Tecla [-] para cancelar o bot.", "dim")
+log("Tecla [Ctrl + -] para cancelar o bot.", "dim")
 log(f"Detecção: {PIXELS_MIN} pixel(s) colorido(s) por slot.", "dim")
 atualizar_janelas_label()
 
