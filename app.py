@@ -34,11 +34,7 @@ tempo_ciclo   = 3600
 total_geral        = 0          # cliques desde o INICIAR
 hora_inicio_bot    = None       # datetime do INICIAR
 
-# Snapshots: {segundos: cliques_naquele_momento}
-INTERVALOS_SEG = [1800, 3600, 5400, 7200, 10800, 14400, 18000, 21600, 25200, 28800]
-INTERVALOS_ROT = ["30min","1h","1h30","2h","3h","4h","5h","6h","7h","8h"]
-snapshots       = {}   # seg -> total registrado
-snapshot_labels = {}   # seg -> tk.Label (referência para atualizar)
+
 
 # ──────────────────────────────────────────────
 #  DETECÇÃO DE ITEM NO SLOT
@@ -83,7 +79,7 @@ BORDER    = "#2a2640"
 # ──────────────────────────────────────────────
 root = tk.Tk()
 root.title("MU COSMIC BOT")
-root.geometry("480x900")
+root.geometry("480x720")
 root.resizable(False, False)
 root.configure(bg=BG)
 
@@ -251,62 +247,11 @@ total_label.pack(side="right", padx=(0, 4))
 
 tk.Frame(root, bg=BORDER, height=1).pack(fill="x")
 
-# ──────────────────────────────────────────────
-#  PAINEL DE ESTATÍSTICAS POR TEMPO
-# ──────────────────────────────────────────────
-stats_frame = tk.Frame(root, bg=BG_PANEL, padx=18, pady=8)
-stats_frame.pack(fill="x")
-
-tk.Label(stats_frame, text="JOIAS RESGATADAS POR INTERVALO", font=MONO_B,
-         fg=PURPLE, bg=BG_PANEL, anchor="w").pack(fill="x", pady=(0, 6))
-
-# Grid 2 colunas × 5 linhas
-grid = tk.Frame(stats_frame, bg=BG_PANEL)
-grid.pack(fill="x")
-
-for i, (seg, rot) in enumerate(zip(INTERVALOS_SEG, INTERVALOS_ROT)):
-    col = i % 2
-    row = i // 2
-
-    cell = tk.Frame(grid, bg=BG_INPUT, padx=8, pady=4)
-    cell.grid(row=row, column=col, padx=(0 if col else 0, 6), pady=2, sticky="ew")
-    grid.columnconfigure(col, weight=1)
-
-    tk.Label(cell, text=rot, font=TINY_F, fg=TEXT_DIM, bg=BG_INPUT,
-             anchor="w").pack(side="left")
-
-    lbl = tk.Label(cell, text="—", font=MED_F, fg=TEXT_DIM, bg=BG_INPUT,
-                   anchor="e")
-    lbl.pack(side="right")
-    snapshot_labels[seg] = lbl
-
 def reset_stats():
-    """Zera estatísticas ao iniciar o bot."""
-    global total_geral, hora_inicio_bot, snapshots
+    global total_geral, hora_inicio_bot
     total_geral     = 0
     hora_inicio_bot = datetime.now()
-    snapshots       = {}
     total_label.config(text="  ✦ 0 joias")
-    for lbl in snapshot_labels.values():
-        lbl.config(text="—", fg=TEXT_DIM)
-
-def registrar_snapshot():
-    """
-    Chamado após cada ciclo. Verifica se algum intervalo
-    de tempo foi atingido e registra o total acumulado.
-    """
-    if hora_inicio_bot is None:
-        return
-    elapsed = (datetime.now() - hora_inicio_bot).total_seconds()
-    for seg in INTERVALOS_SEG:
-        if seg not in snapshots and elapsed >= seg:
-            snapshots[seg] = total_geral
-            rot = INTERVALOS_ROT[INTERVALOS_SEG.index(seg)]
-            lbl = snapshot_labels[seg]
-            lbl.config(text=str(total_geral), fg=GREEN)
-            log(f"  📊 {rot}: {total_geral} joias resgatadas", "warn")
-
-tk.Frame(root, bg=BORDER, height=1).pack(fill="x")
 
 # ──────────────────────────────────────────────
 #  BOTÕES DE AÇÃO
@@ -316,13 +261,13 @@ btn_bar.pack(fill="x")
 
 def small_btn(parent, text, color, cmd):
     b = tk.Button(
-        parent, text=text, font=MONO_B,
+        parent, text=text, font=SMALL_F,
         fg=BG, bg=color,
         activebackground=TEXT, activeforeground=BG,
-        relief="flat", bd=0, padx=14, pady=6,
+        relief="flat", bd=0, padx=10, pady=5,
         cursor="hand2", command=cmd,
     )
-    b.pack(side="left", padx=(0, 8))
+    b.pack(side="left", padx=(0, 6))
     return b
 
 def on_iniciar():
@@ -489,9 +434,6 @@ def rodar_bot(janelas):
         total_label.config(text=f"  ✦ {total_geral} joias")
 
         log(f"=== Ciclo {ciclo_geral}: {cliques_ciclo} joias  |  Total: {total_geral} ===", "cycle")
-
-        # Verifica snapshots de intervalo
-        registrar_snapshot()
 
         t = threading.Thread(target=timer_regressivo, args=(tempo_ciclo,), daemon=True)
         t.start()
