@@ -437,6 +437,26 @@ def rodar_bot(janelas):
                 log(f"Não conseguiu ativar: {win.title}", "err")
                 continue
 
+            # Garante foco real antes de clicar no helper
+            time.sleep(0.3)
+            try: win.activate()
+            except: pass
+            time.sleep(0.3)
+
+            # Clica no MU Helper com mouseDown/mouseUp (mais físico que click)
+            pyautogui.moveTo(751, 160)
+            time.sleep(0.1)
+            pyautogui.mouseDown(button='left')
+            time.sleep(0.05)
+            pyautogui.mouseUp(button='left')
+            time.sleep(1.2)
+            pyautogui.moveTo(751, 160)
+            time.sleep(0.1)
+            pyautogui.mouseDown(button='left')
+            time.sleep(0.05)
+            pyautogui.mouseUp(button='left')
+            time.sleep(0.5)
+
             log(f"Varrendo: {win.title}", "info")
 
             slots_clicados = 0
